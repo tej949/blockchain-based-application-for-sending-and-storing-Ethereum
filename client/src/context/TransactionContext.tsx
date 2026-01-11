@@ -1,7 +1,35 @@
 import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { contractABI, contractAddress } from "../utils/constants";
-export const TransactionContext = React.createContext();
+
+type TxRecord = {
+  addressTo: string;
+  addressFrom: string;
+  timestamp?: string;
+  message?: string;
+  keyword?: string;
+  amount?: number;
+};
+
+type SendTransactionArgs = {
+  addressTo: string;
+  amount: string;
+  keyword: string;
+  message: string;
+};
+
+type TransactionContextType = {
+  transactionCount: number | null;
+  connectWallet: () => Promise<void>;
+  transactions: TxRecord[];
+  currentAccount: string;
+  isLoading: boolean;
+  sendTransaction: (txData?: SendTransactionArgs) => Promise<void>;
+  handleChange: (e: any, name: string) => void;
+  formData: { addressTo: string; amount: string; keyword: string; message: string };
+};
+
+export const TransactionContext = React.createContext<TransactionContextType | null>(null);
 
 const getEthereum = () => window.ethereum;
 
@@ -31,12 +59,18 @@ const createEthereumContract = async () => {
   return null;
 };
 
-export const TransactionProvider = ({ children }) => {
+export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [formData, setformData] = useState({ addressTo: "", amount: "", keyword: "", message: "" });
   const [currentAccount, setCurrentAccount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [transactionCount, setTransactionCount] = useState(localStorage.getItem("transactionCount"));
-  const [transactions, setTransactions] = useState([]);
+  const [transactionCount, setTransactionCount] = useState<number | null>(
+    (() => {
+      const raw = localStorage.getItem("transactionCount");
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) ? n : 0;
+    })()
+  );
+  const [transactions, setTransactions] = useState<TxRecord[]>([]);
 
   const handleChange = (e, name) => {
     setformData((prevState) => ({ ...prevState, [name]: e.target.value }));
@@ -50,19 +84,22 @@ export const TransactionProvider = ({ children }) => {
         if (!transactionsContract) return;
 
         const availableTransactions = await transactionsContract.getAllTransactions();
+        if (!Array.isArray(availableTransactions)) {
+          setTransactions([]);
+        } else {
+          const structuredTransactions: TxRecord[] = availableTransactions.map((transaction: any) => ({
+            addressTo: transaction.receiver,
+            addressFrom: transaction.sender,
+            timestamp: transaction.timestamp ? new Date(transaction.timestamp.toNumber() * 1000).toLocaleString() : undefined,
+            message: transaction.message,
+            keyword: transaction.keyword,
+            amount: transaction.amount ? parseInt(transaction.amount._hex ?? transaction.amount._hex, 16) / 10 ** 18 : undefined,
+          }));
 
-        const structuredTransactions = availableTransactions.map((transaction) => ({
-          addressTo: transaction.receiver,
-          addressFrom: transaction.sender,
-          timestamp: new Date(transaction.timestamp.toNumber() * 1000).toLocaleString(),
-          message: transaction.message,
-          keyword: transaction.keyword,
-          amount: parseInt(transaction.amount._hex) / (10 ** 18)
-        }));
+          console.log(structuredTransactions);
 
-        console.log(structuredTransactions);
-
-        setTransactions(structuredTransactions);
+          setTransactions(structuredTransactions);
+        }
       } else {
         console.log("Ethereum is not present");
       }
@@ -121,13 +158,13 @@ export const TransactionProvider = ({ children }) => {
     }
   };
 
-  const sendTransaction = async () => {
+  const sendTransaction = async (txData?: SendTransactionArgs) => {
     try {
       const ethereum = getEthereum();
       if (ethereum) {
-        const { addressTo, amount, keyword, message } = formData;
+        const { addressTo, amount, keyword, message } = txData ?? formData;
         const transactionsContract = await createEthereumContract();
-        const parsedAmount = ethers.utils.parseEther(amount);
+        const parsedAmount = amount ? ethers.utils.parseEther(String(amount)) : ethers.utils.parseEther("0");
 
         await ethereum.request({
           method: "eth_sendTransaction",
@@ -150,8 +187,8 @@ export const TransactionProvider = ({ children }) => {
           setIsLoading(false);
 
           const transactionsCount = await transactionsContract.getTransactionCount();
-
-          setTransactionCount(transactionsCount.toNumber());
+          const count = typeof transactionsCount.toNumber === "function" ? transactionsCount.toNumber() : Number(transactionsCount);
+          setTransactionCount(Number.isFinite(count) ? count : transactionCount);
           // optionally reload or update state
           window.location.reload();
         } else {

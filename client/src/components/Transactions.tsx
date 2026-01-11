@@ -20,11 +20,11 @@ const TransactionCard = ({ addressTo, addressFrom, timestamp, message, keyword, 
         ">
             <div className="flex flex-col items-center w-full mt-3">
                 <div className="display-flex justify-start w-full mb-6 p-2">
-                    <a href={`https://ropsten.etherscan.io/address/${addressFrom}`} target="_blank" rel="noopener noreferrer">
-                        <p className="text-white text-base">From: {shortenAddress(addressFrom)}</p>
+                    <a href={`https://ropsten.etherscan.io/address/${addressFrom || ''}`} target="_blank" rel="noopener noreferrer">
+                      <p className="text-white text-base">From: {addressFrom ? shortenAddress(addressFrom) : 'Unknown'}</p>
                     </a>
-                    <a href={`https://ropsten.etherscan.io/address/${addressTo}`} target="_blank" rel="noopener noreferrer">
-                        <p className="text-white text-base">To: {shortenAddress(addressTo)}</p>
+                    <a href={`https://ropsten.etherscan.io/address/${addressTo || ''}`} target="_blank" rel="noopener noreferrer">
+                      <p className="text-white text-base">To: {addressTo ? shortenAddress(addressTo) : 'Unknown'}</p>
                     </a>
                     <p className="text-white text-base">Amount: {amount} ETH</p>
                     {message && (
@@ -48,20 +48,33 @@ const TransactionCard = ({ addressTo, addressFrom, timestamp, message, keyword, 
     )
 }
 const Transactions = () => {
-    const { transactions, currentAccount } = useContext(TransactionContext);
-    return(
-        <div className="flex w-full justify-center items-center 2xl:px-20 gradient-bg-transactions">
-            <div className="flex flex-col md:p-12 py-12 px-4">
-                {currentAccount ? (
-                    <h3 className="text-white text-3xl text-center my-2">Latest Transactions</h3>
-                ): (
-                    <h3 className="text-white text-3xl text-center my-2">Connect your account to see the Latest transactions</h3>
-                )}
-                <div className="flex flex-wrap justify-centre items-center mt-10">
-                    {[...dummyData, ...transactions].reverse().map((transaction, i) => ( <TransactionCard key={i} {...transaction} />))}
-                </div>
-            </div>
+  const context = useContext(TransactionContext);
+  if (!context) return null;
+
+  const { transactions = [], currentAccount } = context;
+
+  return (
+    <div className="flex w-full justify-center items-center 2xl:px-20 gradient-bg-transactions">
+      <div className="flex flex-col md:p-12 py-12 px-4">
+        {currentAccount ? (
+          <h3 className="text-white text-3xl text-center my-2">
+            Latest Transactions
+          </h3>
+        ) : (
+          <h3 className="text-white text-3xl text-center my-2">
+            Connect your account to see the Latest transactions
+          </h3>
+        )}
+
+        <div className="flex flex-wrap justify-center items-center mt-10">
+          {[...dummyData, ...(Array.isArray(transactions) ? transactions : [])]
+            .reverse()
+            .map((transaction, i) => (
+              <TransactionCard key={i} {...transaction} />
+            ))}
         </div>
-    );
-}
+      </div>
+    </div>
+  );
+};
 export default Transactions;
